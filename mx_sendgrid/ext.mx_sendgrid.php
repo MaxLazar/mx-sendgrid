@@ -21,7 +21,7 @@ use ZBateson\MailMimeParser\Message;
 use ZBateson\MailMimeParser\Header\HeaderConsts;
 use GuzzleHttp\Psr7;
 
-//  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
+
 class Mx_sendgrid_ext
 {
 
@@ -221,7 +221,7 @@ class Mx_sendgrid_ext
             $data['text'] = $data['finalbody'];
         }
 
-        $data['attachment'] = $messageOrg->getAttachmentPart(0);
+        $data['attachment'] = $messageOrg->getAllAttachmentParts();
 
         return self::send_api($data, $this->settings);
     }
@@ -241,6 +241,7 @@ class Mx_sendgrid_ext
         $bcc     = [];
         $subject = isset($data["subject"]) ? $data["subject"] : '';
 
+        ee()->load->library('logger');
 
         // Set the recipient.
         foreach ($data["recipients"] as $key => $value) {
@@ -284,18 +285,26 @@ class Mx_sendgrid_ext
             $email->addContent(new HtmlContent($data['html']));
         };
 
-        if ($data['attachment'] !== null) {
-            $attachments = [
-                [
-                    base64_encode($data['attachment']->getContentStream()),
-                    $data['attachment']->getHeaderValue(HeaderConsts::CONTENT_TYPE),
-                    $data['attachment']->getFilename(),
-                    "attachment",
-                    $data['attachment']->getFilename(),
-                ]
-            ];
 
-            $email->addAttachments($attachments);
+
+        if ($data['attachment'] !== null) {
+
+            foreach ($data['attachment'] as $index => $attachment) {
+                $attachments = [
+                    [
+                        base64_encode($attachment->getContentStream()),
+                        $attachment->getHeaderValue(HeaderConsts::CONTENT_TYPE),
+                        $attachment->getFilename(),
+                        "attachment",
+                        $attachment->getFilename(),
+                    ]
+                ];
+
+                $email->addAttachments($attachments);
+            }
+
+
+
         }
 
         $sendgrid = new \SendGrid($settings['apikey']);
