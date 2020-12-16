@@ -1,7 +1,4 @@
 # MX SendGrid
-![MX SendGrid](resources/img/mx-sendgrid.png)
-
-![MX SendGrid Demo](resources/img/mx-sendgrid-demo.png)
 
 SendGrid mailer adapter for ExpressionEngine.
 
@@ -9,16 +6,15 @@ SendGrid mailer adapter for ExpressionEngine.
 * Download the latest version of MX SendGrid and extract the .zip to your desktop.
 * Copy *inline* to */system/user/addons/*
 
-## Compatibility	
+## Compatibility
 
 * ExpressionEngine 4
 * ExpressionEngine 5
 * ExpressionEngine 6
 
-
 ## Configuration
 
-**apikey** 
+**apikey**
 
 [SendGrid API Key](https://sendgrid.com/docs/ui/account-and-settings/api-keys/)
 
