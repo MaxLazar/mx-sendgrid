@@ -2,7 +2,6 @@
     exit('No direct script access allowed');
 }
 
-require_once __DIR__ . '/vendor/autoload.php';
 
 use SendGrid\Mail\Mail;
 use SendGrid\Mail\From;
@@ -198,9 +197,14 @@ class Mx_sendgrid_ext
         ee()->functions->redirect(ee('CP/URL')->make('addons/settings/mx_sendgrid'));
     }
 
-
+    /**
+     * @param $data
+     * @return bool|null
+     */
     public function email_send($data)
     {
+        require_once __DIR__ . '/vendor/autoload.php';
+
         $body = str_replace(array('{unwrap}', '{/unwrap}'), '', $data['finalbody']);
 
         if (!isset($this->settings['apikey']) || $this->settings['enable'] != true) {
@@ -216,10 +220,50 @@ class Mx_sendgrid_ext
         $data['fromEmail'] = $data['from']->getEmail();
 
         $data['fromName'] = ($data['fromName'] == "From") ? '' : $data['fromName'];
+        $data["subject"]  = isset($data["subject"]) ? $data["subject"] : '';
+
 
         if ($data['text'] === null && $data['html'] === null) {
             $data['text'] = $data['finalbody'];
         }
+
+        $data['to_recipients']  = array();
+        $data['cc_recipients']  = array();
+        $data['bcc_recipients'] = array();
+
+        // Set the recipient.
+        if (!empty($data["recipients"])) {
+            foreach ($data["recipients"] as $value) {
+                $data['to_recipients'] = array_merge($data['to_recipients'], self::recipients2array($value));
+            }
+        }
+
+        // Check Cc
+        if (!empty($data['headers']['Cc'])) {
+            $data['cc_recipients'] = self::recipients2array($data['headers']['Cc']);
+        }
+
+        // Check Bcc
+        if (!empty($data['headers']['Bcc'])) {
+            $data['bcc_recipients'] = self::recipients2array($data['headers']['Bcc']);
+        }
+
+        // Set the cc_array
+        foreach ($data["cc_array"] as $key => $value) {
+            $data['cc_recipients'] = array_merge($data['cc_recipients'], self::recipients2array($value));
+        }
+
+        // Set the bcc_array
+        foreach ($data["bcc_array"] as $key => $value) {
+            $data['bcc_recipients'] = array_merge($data['bcc_recipients'], self::recipients2array($value));
+        }
+
+        // Set headers
+        $data["headers_x"] = [
+            "User-Agent" => "ExpressionEngine",
+            "X-Mailer"  => "ExpressionEngine (via MX)",
+            "Reply-To"  => $data['headers']['Reply-To']
+        ];
 
         $data['attachment'] = $messageOrg->getAllAttachmentParts();
 
@@ -235,48 +279,30 @@ class Mx_sendgrid_ext
      */
     public function send_api($data, $settings)
     {
-        $sent    = false;
-        $tos     = [];
-        $cc      = [];
-        $bcc     = [];
-        $subject = isset($data["subject"]) ? $data["subject"] : '';
+        $sent = false;
+        $tos  = [];
+        $cc   = [];
+        $bcc  = [];
 
         ee()->load->library('logger');
-
-        // Set the recipient.
-        foreach ($data["recipients"] as $key => $value) {
-            $to                = self::email_split($value);
-            $tos[$to['email']] = $to['name'];
-        }
-
-        // Set the cc_array
-        foreach ($data["cc_array"] as $key => $value) {
-            $to               = self::email_split($value);
-            $cc[$to['email']] = $to['name'];
-        }
-
-        // Set the bcc_array
-        foreach ($data["bcc_array"] as $key => $value) {
-            $to                = self::email_split($value);
-            $bcc[$to['email']] = $to['name'];
-        }
-
 
         $email = new Mail();
 
         $email->setFrom($data['fromEmail'], $data['fromName']);
 
-        $email->addTos($tos);
+        $email->addHeaders($data['headers_x']);
 
-        if (count($cc) > 0) {
-            $email->addCcs($cc);
+        $email->addTos($data['to_recipients']);
+
+        if (count($data['cc_recipients']) > 0) {
+            $email->addCcs($data['cc_recipients']);
         }
 
-        if (count($bcc) > 0) {
-            $email->addBcc($bcc);
+        if (count($data['bcc_recipients']) > 0) {
+            $email->addBccs($data['bcc_recipients']);
         }
 
-        $email->setSubject($subject);
+        $email->setSubject($data["subject"]);
 
         // Set the message body.
         $email->addContent("text/plain", $data['text']);
@@ -285,10 +311,7 @@ class Mx_sendgrid_ext
             $email->addContent(new HtmlContent($data['html']));
         };
 
-
-
         if ($data['attachment'] !== null) {
-
             foreach ($data['attachment'] as $index => $attachment) {
                 $attachments = [
                     [
@@ -302,13 +325,9 @@ class Mx_sendgrid_ext
 
                 $email->addAttachments($attachments);
             }
-
-
-
         }
 
         $sendgrid = new \SendGrid($settings['apikey']);
-
 
         try {
             $response = $sendgrid->send($email);
@@ -332,12 +351,31 @@ class Mx_sendgrid_ext
     }
 
     /**
+     * @param $str
+     */
+    public function recipients2array($str)
+    {
+        $results    = [];
+        $recipients = explode(',', $str);
+
+        foreach ($recipients as $email) {
+            $results = array_merge($results, self::email_split(trim($email)));
+        }
+
+        return $results;
+    }
+
+    /**
      * [email_split description] Thanks to https://stackoverflow.com/questions/16685416/split-full-email-addresses-into-name-and-email
      * @param  [type] $str [description]
      * @return [type]      [description]
      */
     public function email_split($str)
     {
+        if ($str == '') {
+            return null;
+        }
+
         $str .= " ";
 
         $re = '/(?:,\s*)?(.*?)\s*(?|<([^>]*)>|\[([^][]*)]|(\S+@\S+))/';
@@ -346,7 +384,8 @@ class Mx_sendgrid_ext
         $name  = (isset($m[0][1])) ? $m[0][1] : '';
         $email = (isset($m[0][2])) ? $m[0][2] : '';
 
-        return array('name' => trim($name), 'email' => trim($email));
+        //return array('name' => trim($name), 'email' => trim($email));
+        return array(trim($email) => trim($name));
     }
 
 
