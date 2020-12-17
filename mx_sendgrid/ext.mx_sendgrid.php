@@ -1,6 +1,7 @@
 <?php if (!defined('BASEPATH')) {
     exit('No direct script access allowed');
 }
+require_once __DIR__ . '/vendor/autoload.php';
 
 
 use SendGrid\Mail\Mail;
@@ -203,7 +204,7 @@ class Mx_sendgrid_ext
      */
     public function email_send($data)
     {
-        require_once __DIR__ . '/vendor/autoload.php';
+    //    require_once __DIR__ . '/vendor/autoload.php';
 
         $body = str_replace(array('{unwrap}', '{/unwrap}'), '', $data['finalbody']);
 
